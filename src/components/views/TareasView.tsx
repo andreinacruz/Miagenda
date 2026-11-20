@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   CheckCircle2,
   Circle,
   Clock,
   Pencil,
   Plus,
+  Search,
   Trash2,
+  X,
 } from 'lucide-react';
-import { CourseTask } from '../../types';
+import { CourseTask, PriorityLevel } from '../../types';
 import { formatCompactDay, formatShortDate, isOverdue } from '../../utils/dateUtils';
 import { PriorityBadge } from '../PriorityBadge';
 
@@ -19,7 +21,8 @@ interface TareasViewProps {
   onToggleTaskStatus: (id: string) => void;
 }
 
-type TaskFilter = 'all' | 'pending' | 'completed';
+type TaskStatusFilter = 'all' | 'pending' | 'completed';
+type PriorityFilter = 'all' | PriorityLevel;
 
 export function TareasView({
   tasks,
@@ -28,7 +31,9 @@ export function TareasView({
   onDeleteTask,
   onToggleTaskStatus,
 }: TareasViewProps) {
-  const [filter, setFilter] = useState<TaskFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<TaskStatusFilter>('all');
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
 
   const totalTasks = tasks.length;
   const pendingCount = tasks.filter((t) => t.status === 'pending').length;
@@ -36,16 +41,32 @@ export function TareasView({
   const completionPercent =
     totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
 
-  const filteredTasks = [...tasks]
-    .filter((t) => {
-      if (filter === 'pending') return t.status === 'pending';
-      if (filter === 'completed') return t.status === 'completed';
-      return true;
-    })
-    .sort((a, b) => {
-      if (a.status !== b.status) return a.status === 'pending' ? -1 : 1;
-      return a.dueDate.localeCompare(b.dueDate);
-    });
+  const filteredTasks = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return [...tasks]
+      .filter((t) => {
+        // Status filter
+        if (statusFilter === 'pending' && t.status !== 'pending') return false;
+        if (statusFilter === 'completed' && t.status !== 'completed') return false;
+
+        // Priority filter
+        if (priorityFilter !== 'all' && t.priority !== priorityFilter) return false;
+
+        // Search query
+        if (q) {
+          const matchesTitle = t.title.toLowerCase().includes(q);
+          const matchesDesc = t.description.toLowerCase().includes(q);
+          const matchesModule = t.module.toLowerCase().includes(q);
+          if (!matchesTitle && !matchesDesc && !matchesModule) return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        if (a.status !== b.status) return a.status === 'pending' ? -1 : 1;
+        return a.dueDate.localeCompare(b.dueDate);
+      });
+  }, [tasks, statusFilter, priorityFilter, searchQuery]);
 
   return (
     <div className="space-y-4">
@@ -86,13 +107,89 @@ export function TareasView({
         </div>
       </section>
 
-      {/* Filtros segmentados */}
+      {/* Barra de búsqueda */}
+      <div className="relative">
+        <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Buscar tareas..."
+          aria-label="Buscar tareas"
+          className="w-full min-h-[48px] pl-11 pr-11 py-2.5 rounded-xl border border-slate-200 bg-white text-base text-slate-900 placeholder:text-slate-400 focus:border-blue-600 focus:outline-none"
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery('')}
+            aria-label="Limpiar búsqueda"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center absolute right-1 top-1/2 -translate-y-1/2 text-slate-400"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Selector de filtros por prioridad debajo de la barra de búsqueda */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+          Filtrar por prioridad
+        </label>
+        <div className="grid grid-cols-4 gap-1.5">
+          <button
+            type="button"
+            onClick={() => setPriorityFilter('all')}
+            className={`min-h-[40px] px-2.5 py-2 rounded-xl text-xs font-semibold transition-all border ${
+              priorityFilter === 'all'
+                ? 'bg-slate-900 text-white border-slate-900'
+                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Todas
+          </button>
+          <button
+            type="button"
+            onClick={() => setPriorityFilter('alta')}
+            className={`min-h-[40px] px-2.5 py-2 rounded-xl text-xs font-semibold transition-all border ${
+              priorityFilter === 'alta'
+                ? 'bg-rose-600 text-white border-rose-600'
+                : 'bg-white text-rose-700 border-rose-200 hover:bg-rose-50/50'
+            }`}
+          >
+            Alta
+          </button>
+          <button
+            type="button"
+            onClick={() => setPriorityFilter('media')}
+            className={`min-h-[40px] px-2.5 py-2 rounded-xl text-xs font-semibold transition-all border ${
+              priorityFilter === 'media'
+                ? 'bg-amber-600 text-white border-amber-600'
+                : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50/50'
+            }`}
+          >
+            Media
+          </button>
+          <button
+            type="button"
+            onClick={() => setPriorityFilter('baja')}
+            className={`min-h-[40px] px-2.5 py-2 rounded-xl text-xs font-semibold transition-all border ${
+              priorityFilter === 'baja'
+                ? 'bg-emerald-600 text-white border-emerald-600'
+                : 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50/50'
+            }`}
+          >
+            Baja
+          </button>
+        </div>
+      </div>
+
+      {/* Filtros de estado (segmentados) */}
       <div className="grid grid-cols-3 gap-1 p-1 bg-slate-200/70 rounded-xl">
         <button
           type="button"
-          onClick={() => setFilter('all')}
+          onClick={() => setStatusFilter('all')}
           className={`min-h-[44px] px-2 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap tabular-nums ${
-            filter === 'all'
+            statusFilter === 'all'
               ? 'bg-white text-slate-900 shadow-xs'
               : 'text-slate-600'
           }`}
@@ -101,9 +198,9 @@ export function TareasView({
         </button>
         <button
           type="button"
-          onClick={() => setFilter('pending')}
+          onClick={() => setStatusFilter('pending')}
           className={`min-h-[44px] px-2 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap tabular-nums ${
-            filter === 'pending'
+            statusFilter === 'pending'
               ? 'bg-white text-slate-900 shadow-xs'
               : 'text-slate-600'
           }`}
@@ -112,9 +209,9 @@ export function TareasView({
         </button>
         <button
           type="button"
-          onClick={() => setFilter('completed')}
+          onClick={() => setStatusFilter('completed')}
           className={`min-h-[44px] px-2 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap tabular-nums ${
-            filter === 'completed'
+            statusFilter === 'completed'
               ? 'bg-white text-slate-900 shadow-xs'
               : 'text-slate-600'
           }`}
@@ -128,10 +225,8 @@ export function TareasView({
         <div className="bg-white border border-slate-200/90 rounded-2xl p-6 text-center space-y-3">
           <CheckCircle2 className="w-8 h-8 text-slate-400 mx-auto" />
           <p className="text-base font-semibold text-slate-800">
-            {filter === 'pending'
-              ? 'No tienes tareas pendientes'
-              : filter === 'completed'
-              ? 'Aún no completas tareas'
+            {searchQuery || priorityFilter !== 'all' || statusFilter !== 'all'
+              ? 'No hay tareas que coincidan con los filtros'
               : 'No hay tareas registradas'}
           </p>
           <button
